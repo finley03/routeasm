@@ -2,7 +2,7 @@
 
 ## Mnemonics:
 
-### INTEGER:
+### INTEGER / INT:
 Define an 16 bit signed integer\
 Usage:
 `INTEGER [name] [value]`
@@ -122,7 +122,7 @@ IF_Z
 ENDIF
 ```
 
-### INCREMENT / DECREMENT
+### INCREMENT / DECREMENT / INC / DEC
 Perform respective operations on given variable\
 Usage:
 ```
