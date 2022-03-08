@@ -1,5 +1,5 @@
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef ROUTEASM_H
+#define ROUTEASM_H
 
 #include "util.h"
 
@@ -30,5 +30,10 @@
 #define ENDIF 0x19
 #define BREAK_WHILE 0x20
 #define END 0x21
+
+#ifdef AUTOPILOT_INTERFACE
+bool routeasm(std::string inputfile, std::string filestring, uint8_t*& writeback, int& size);
+void routeasm_get_log(std::string& routeLog);
+#endif
 
 #endif

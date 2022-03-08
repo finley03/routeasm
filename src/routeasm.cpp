@@ -1,8 +1,18 @@
-#include "main.h"
+#include "routeasm.h"
 
 
+#ifndef AUTOPILOT_INTERFACE
 void printHelp();
 bool assemblefile(std::string inputfile, std::string outputfile);
+#else
+bool assemblefile(std::string inputfile, std::string filestring, uint8_t*& dataptr, int& datasize);
+#endif
+//void showMessage(std::string filepath, const char* msg, INT_T line = -1);
+
+
+#ifdef AUTOPILOT_INTERFACE
+std::string compileLog;
+#endif
 
 
 template <typename T1, typename T2>
@@ -10,7 +20,9 @@ bool compare(T1 str1, T2 str2) {
 	return strcmp(str1, str2) == 0;
 }
 
+// AUTOPILOT_INTERFACE option compiles file differently if it is contained in program
 
+#ifndef AUTOPILOT_INTERFACE
 int main(int argc, char** argv) {
 	INT_T ret = 0;
 	std::string inputfile;
@@ -69,6 +81,17 @@ end:
 	if (ret != 0) std::cout << "Build failed\n";
 	return ret;
 }
+#else
+bool routeasm(std::string inputfile, std::string filestring, uint8_t*& writeback, int& size) {
+	compileLog.clear();
+	if (!assemblefile(inputfile, filestring, writeback, size)) {
+		compileLog.append("Build Failed");
+		return false;
+	}
+	compileLog.append("Build Succeeded");
+	return true;
+}
+#endif
 
 
 // Increment pointer to beyond whitespace
@@ -105,8 +128,15 @@ inline void ptrnextvalue(const char*& strptr, char seperator) {
 
 
 void showMessage(std::string filepath, const char* msg, INT_T line = -1) {
+#ifndef AUTOPILOT_INTERFACE
 	if (line > -1) printf("%s(%d): %s\n", filepath.c_str(), line, msg);
 	else printf("%s: %s\n", filepath.c_str(), msg);
+#else
+	char buffer[256];
+	if (line > -1) sprintf(buffer, "%s(%d): %s\n", filepath.c_str(), line, msg);
+	else sprintf(buffer, "%s: %s\n", filepath.c_str(), msg);
+	compileLog.append(buffer);
+#endif
 }
 
 
@@ -134,21 +164,33 @@ bool pushVarData(std::string name, std::string inputfile) {
 }
 
 
+#ifndef AUTOPILOT_INTERFACE
 bool assemblefile(std::string inputfile, std::string outputfile) {
+#else
+bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &dataptr, int& datasize) {
+#endif
 	//std::cout << inputfile << "\n";
 	//std::cout << outputfile << "\n";
+	data.clear();
+	integers.clear();
 
 	namespace fs = std::filesystem;
 	fs::path currentpath = fs::current_path();
+#ifndef AUTOPILOT_INTERFACE
 	std::string inputpath = currentpath.string();
 	//#if defined(_WIN32) || defined(_WIN64)
 	//	inputpath.append("\\");
 	//#else
+
 	inputpath.append("/");
 	//#endif
 	inputpath.append(inputfile);
+#else
+	std::string inputpath = inputfile;
+#endif
 	std::replace(inputpath.begin(), inputpath.end(), '\\', '/');
 
+#ifndef AUTOPILOT_INTERFACE
 	std::string outputpath = currentpath.string();
 	outputpath.append("/");
 	outputpath.append(outputfile);
@@ -162,6 +204,7 @@ bool assemblefile(std::string inputfile, std::string outputfile) {
 		std::cout << "Error opening file: " << inputpath << "\n";
 		return false;
 	}
+#endif
 	// insert newline at start of file
 	filestring.insert(0, "\n");
 	// add space at end of string
@@ -288,7 +331,7 @@ bool assemblefile(std::string inputfile, std::string outputfile) {
 			break;
 
 		case 'd':
-			if (strncmp(lineptr, "decrement", 9) == 0) {
+			if (strncmp(lineptr, "decrement", 9) == 0 || strncmp(lineptr, "dec", 3)) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(DECREMENT);
@@ -493,7 +536,7 @@ bool assemblefile(std::string inputfile, std::string outputfile) {
 				std::string intname = std::string(lineptr, size);
 				INT_T index = integers.size();
 				integers[intname] = index;
-				data.push_back((uint8_t) index);
+				data.push_back((uint8_t)index);
 
 				ptrnextvalue(lineptr);
 				// check value is given
@@ -503,10 +546,10 @@ bool assemblefile(std::string inputfile, std::string outputfile) {
 				}
 				// record value
 				int16_t value = atoi(lineptr);
-				data.push_back((uint8_t) value);
+				data.push_back((uint8_t)value);
 				data.push_back((uint8_t)(value >> 8));
 			}
-			else if (strncmp(lineptr, "increment", 9) == 0) {
+			else if (strncmp(lineptr, "increment", 9) == 0 || strncmp(lineptr, "inc", 3)) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(INCREMENT);
@@ -746,15 +789,23 @@ bool assemblefile(std::string inputfile, std::string outputfile) {
 	//	printf("%02X\n", *it);
 	//}
 
-	uint8_t* dataptr = (uint8_t*) malloc(data.size());
+#ifndef AUTOPILOT_INTERFACE
+	uint8_t* dataptr = (uint8_t*)malloc(data.size());
+#else
+	dataptr = (uint8_t*)realloc(dataptr, data.size());
+	datasize = data.size();
+#endif
 	std::copy(data.begin(), data.end(), dataptr);
+#ifndef AUTOPILOT_INTERFACE
 	writeDataToFile(outputpath, dataptr, data.size());
 	free(dataptr);
+#endif
 
 	return true;
 }
 
 
+#ifndef AUTOPILOT_INTERFACE
 void printHelp() {
 #if defined(_WIN32) || defined(_WIN64)
 	std::cout << "Usage: routeasm.exe [-o outfile] filename\n\n";
@@ -765,3 +816,11 @@ void printHelp() {
 	std::cout << "-o outfile   define output file path\n";
 	std::cout << "-h (--help)  display this help screen\n";
 }
+#endif
+
+
+#ifdef AUTOPILOT_INTERFACE
+void routeasm_get_log(std::string & routeLog) {
+	routeLog.assign(compileLog);
+}
+#endif
