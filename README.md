@@ -2,28 +2,52 @@
 
 ## Mnemonics:
 
-### INTEGER / INT:
+### INTEGER / INT
 Define an 16 bit signed integer\
 Usage:
-`INTEGER [name] [value]`
+```
+INTEGER [name] [value]
+```
 Example:
-`INTEGER count 18`
+```
+INTEGER count 18
+```
 
-### POINT:
+### POINT
 Describes a waypoint in north-east-down coordinates\
 Usage:
-`POINT x y z`
+```
+POINT x y z
+```
 Example:
-`POINT 14.2 17 19.75`
+```
+POINT 14.2 17 19.75
+```
 
-### PRINT:
+### POINT_LLA
+Describes a waypoint in latitude-longitude-altitude (above home) coordinates\
+Usage:
+```
+POINT_LLA [latitude] [longitude] [altitude]
+```
+Example:
+```
+POINT_LLA 50.000 0.000 35
+```
+Note: requires home to be defined using the .home_ll directive
+
+### PRINT
 Print integer to the standard output\
 Usage:
-`PRINT [varname]`
+```
+PRINT [varname]
+```
 Example:
-`PRINT count`
+```
+PRINT count
+```
 
-### WHILE:
+### WHILE
 Start unlimited while loop\
 Usage:
 ```
@@ -163,4 +187,17 @@ Usage:
 ..
 ..
 END
+```
+
+## Directives:
+
+### .home_ll
+Define the latitude and longitude of the home position for using the POINT_LLA mnemonic\
+Usage:
+```
+.home_ll [latitude] [longitude]
+```
+Example:
+```
+.home_ll 50.000 0.000
 ```

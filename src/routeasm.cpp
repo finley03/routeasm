@@ -14,6 +14,8 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t*& datap
 std::string compileLog;
 #endif
 
+float gnss_zerolat, gnss_zerolong;
+bool gnss_zero_defined;
 
 template <typename T1, typename T2>
 bool compare(T1 str1, T2 str2) {
@@ -140,6 +142,19 @@ void showMessage(std::string filepath, const char* msg, INT_T line = -1) {
 }
 
 
+void unknown(std::string filepath, int line = -1) {
+#ifndef AUTOPILOT_INTERFACE
+	if (line > -1) printf("%s(%d): Error: Unknown command\n", filepath.c_str(), line);
+	else printf("%s: Error: Unknown command\n", filepath.c_str());
+#else
+	char buffer[256];
+	if (line > -1) sprintf(buffer, "%s(%d): Error: Unknown command\n", filepath.c_str(), line);
+	else sprintf(buffer, "%s: Error: Unknown command\n", filepath.c_str());
+	compileLog.append(buffer);
+#endif
+}
+
+
 // assembled data
 std::vector<uint8_t> data;
 
@@ -164,11 +179,22 @@ bool pushVarData(std::string name, std::string inputfile) {
 }
 
 
+#define radians(x) ((x) * 0.01745329251994329576923690768489)
+void gps_cartesian(float latitude, float longitude, float* x, float* y) {
+	float multiplier = 111194.9266;
+
+	*x = (latitude - gnss_zerolat) * multiplier;
+	*y = (longitude - gnss_zerolong) * multiplier * cos(radians(latitude));
+}
+
+
 #ifndef AUTOPILOT_INTERFACE
 bool assemblefile(std::string inputfile, std::string outputfile) {
 #else
 bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &dataptr, int& datasize) {
 #endif
+	gnss_zero_defined = false;
+	linenumber = 1;
 	//std::cout << inputfile << "\n";
 	//std::cout << outputfile << "\n";
 	data.clear();
@@ -284,7 +310,7 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				data.push_back((uint8_t)value);
 				data.push_back((uint8_t)(value >> 8));
 			}
-			else if (strncmp(lineptr, "add", 3) == 0) {
+			else if (strncmp(lineptr, "add", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(ADD);
@@ -324,10 +350,18 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'b':
 			if (strncmp(lineptr, "break_while", 11) == 0) data.push_back(BREAK_WHILE);
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'd':
@@ -375,7 +409,7 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				data.push_back((uint8_t)value);
 				data.push_back((uint8_t)(value >> 8));
 			}
-			else if (strncmp(lineptr, "div", 3) == 0) {
+			else if (strncmp(lineptr, "div", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(ADD);
@@ -415,35 +449,29 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'e':
 			if (strncmp(lineptr, "endwhile", 8) == 0) data.push_back(ENDWHILE);
 			else if (strncmp(lineptr, "endif", 5) == 0) data.push_back(ENDIF);
 			else if (strncmp(lineptr, "endfor", 6) == 0) data.push_back(ENDFOR);
-			else if (strncmp(lineptr, "end", 3) == 0) {
+			else if (strncmp(lineptr, "end", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
 				data.push_back(END);
 				end = true;
 				endLength = data.size();
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'f':
-			if (strncmp(lineptr, "for", 3) == 0) {
-				// record line end
-				const char* lineend = strchr(lineptr, '\n');
-				data.push_back(FOR);
-				ptrnextvalue(lineptr);
-				// check name is given
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: argument required for FOR", linenumber);
-					return false;
-				}
-				int16_t value = atoi(lineptr);
-				data.push_back((uint8_t)value);
-				data.push_back((uint8_t)(value >> 8));
-			}
-			else if (strncmp(lineptr, "for_var", 7) == 0) {
+			if (strncmp(lineptr, "for_var", 7) == 0) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(FOR_VAR);
@@ -457,6 +485,24 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				INT_T size = strcspn(lineptr, " ");
 				std::string name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
+			}
+			else if (strncmp(lineptr, "for", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
+				// record line end
+				const char* lineend = strchr(lineptr, '\n');
+				data.push_back(FOR);
+				ptrnextvalue(lineptr);
+				// check name is given
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: argument required for FOR", linenumber);
+					return false;
+				}
+				int16_t value = atoi(lineptr);
+				data.push_back((uint8_t)value);
+				data.push_back((uint8_t)(value >> 8));
+			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
 			}
 			break;
 
@@ -564,6 +610,10 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				std::string name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'm':
@@ -595,7 +645,7 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				data.push_back((uint8_t)value);
 				data.push_back((uint8_t)(value >> 8));
 			}
-			else if (strncmp(lineptr, "mul", 3) == 0) {
+			else if (strncmp(lineptr, "mul", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(MUL);
@@ -635,10 +685,59 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'p':
-			if (strncmp(lineptr, "point", 5) == 0) {
+			if (strncmp(lineptr, "point_lla", 9) == 0) {
+				if (!gnss_zero_defined) {
+					showMessage(inputpath, "Error: home position not defined, use .home_ll to define", linenumber);
+					return false;
+				}
+				// record line end
+				const char* lineend = strchr(lineptr, '\n');
+				// create type converter
+				Float_Converter converter;
+				// allocate memory
+				data.reserve(13);
+				data.push_back(POINT);
+				// go to first value
+				ptrnextvalue(lineptr);
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: no arguments given for POINT_LLA, 3 required", linenumber);
+					return false;
+				}
+				float latitude = atof(lineptr);
+				// next value
+				ptrnextvalue(lineptr);
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: one argument given for POINT_LLA, 3 required", linenumber);
+					return false;
+				}
+				float longitude = atof(lineptr);
+				// next value
+				ptrnextvalue(lineptr);
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: two arguments given for POINT_LLA, 3 required", linenumber);
+					return false;
+				}
+				float altitude = atof(lineptr);
+
+				float x, y;
+				gps_cartesian(latitude, longitude, &x, &y);
+
+				float coords[3] = { x, y, -altitude };
+				for (int i = 0; i < 3; ++i) {
+					converter.value = coords[i];
+					for (int j = 0; j < 4; ++j) {
+						data.push_back(converter.reg[j]);
+					}
+				}
+			}
+			else if (strncmp(lineptr, "point", 5) == 0 && (*(lineptr + 5) == '\n' || *(lineptr + 5) == '\0' || *(lineptr + 5) == ' ' || *(lineptr + 5) == ';')) {
 				// store end of line
 				const char* lineend = strchr(lineptr, '\n');
 				// create type converter
@@ -649,10 +748,6 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				// go to next value
 				for (INT_T i = 0; i < 3; ++i) {
 					ptrnextvalue(lineptr);
-					//if (*lineptr == '\n') {
-					//	showMessage(inputpath, linenumber, "Error: invalid arguments to mnemonic \"POINT\"");
-					//	return false;
-					//}
 					converter.value = atof(lineptr);
 					for (INT_T j = 0; j < 4; ++j) {
 						data.push_back(converter.reg[j]);
@@ -660,7 +755,7 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				}
 
 				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: invalid arguments to mnemonic \"POINT\"", linenumber);
+					showMessage(inputpath, "Error: invalid arguments to mnemonic POINT", linenumber);
 					return false;
 				}
 			}
@@ -678,6 +773,10 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				INT_T size = strcspn(lineptr, " \n");
 				std::string name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
+			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
 			}
 			break;
 
@@ -710,7 +809,7 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				data.push_back((uint8_t)value);
 				data.push_back((uint8_t)(value >> 8));
 			}
-			else if (strncmp(lineptr, "sub", 3) == 0) {
+			else if (strncmp(lineptr, "sub", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) {
 				// record line end
 				const char* lineend = strchr(lineptr, '\n');
 				data.push_back(SUB);
@@ -750,6 +849,10 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
 			break;
 
 		case 'w':
@@ -768,7 +871,48 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				std::string name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
-			else if (strncmp(lineptr, "while", 5) == 0) data.push_back(WHILE);
+			else if (strncmp(lineptr, "while", 5) == 0 && (*(lineptr + 5) == '\n' || *(lineptr + 5) == '\0' || *(lineptr + 5) == ' ' || *(lineptr + 5) == ';')) data.push_back(WHILE);
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
+			break;
+
+		case '.':
+			if (strncmp(lineptr, ".home_ll", 7) == 0) {
+				// record line end
+				const char* lineend = strchr(lineptr, '\n');
+				ptrnextvalue(lineptr);
+				// check first value is given
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: no arguments given for \".home_ll\", two required", linenumber);
+					return false;
+				}
+				gnss_zerolat = atof(lineptr);
+				ptrnextvalue(lineptr);
+				// check second value is given
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: one argument given for \".home_ll\", two required", linenumber);
+					return false;
+				}
+				gnss_zerolong = atof(lineptr);
+				gnss_zero_defined = true;
+			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
+			break;
+
+		case ';':
+		case '\n':
+		case '\0':
+			++lineptr;
+			break;
+
+		default:
+			unknown(inputpath, linenumber);
+			return false;
 			break;
 		}
 
