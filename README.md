@@ -34,7 +34,6 @@ Example:
 ```
 POINT_LLA 50.000 0.000 35
 ```
-Note: requires home to be defined using the .home_ll directive
 
 ### PRINT
 Print integer to the standard output\
@@ -179,6 +178,16 @@ Example
 MUL_ASSIGN count 2
 ```
 
+### LAUNCH
+Enter Launch flight mode\
+Auto flight mode will be restored when the launch sequence has ended\
+
+### LAND
+Enter Land flight mode\
+
+### RTL
+Enter Return to Launch (RTL) flight mode\
+
 ### END
 Terminate program, Must be at end of every program\
 Any code after an END directive is unreachable\
@@ -191,13 +200,4 @@ END
 
 ## Directives:
 
-### .home_ll
-Define the latitude and longitude of the home position for using the POINT_LLA mnemonic\
-Usage:
-```
-.home_ll [latitude] [longitude]
-```
-Example:
-```
-.home_ll 50.000 0.000
-```
+All previous directives have been removed.

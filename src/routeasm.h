@@ -30,6 +30,10 @@
 #define ENDIF 0x19
 #define BREAK_WHILE 0x20
 #define END 0x21
+#define POINT_LLA 0x22
+#define LAUNCH 0x23
+#define LAND 0x24
+#define RTL 0x25
 
 #ifdef AUTOPILOT_INTERFACE
 bool routeasm(std::string inputfile, std::string filestring, uint8_t*& writeback, int& size);

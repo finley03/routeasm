@@ -616,6 +616,15 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 			}
 			break;
 
+		case 'l':
+			if (strncmp(lineptr, "launch", 6) == 0) data.push_back(LAUNCH);
+			else if (strncmp(lineptr, "land", 4) == 0 && (*(lineptr + 4) == '\n' || *(lineptr + 4) == '\0' || *(lineptr + 4) == ' ' || *(lineptr + 4) == ';')) data.push_back(LAND);
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
+			break;
+
 		case 'm':
 			if (strncmp(lineptr, "mul_assign", 10) == 0) {
 				// record line end
@@ -693,48 +702,69 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 
 		case 'p':
 			if (strncmp(lineptr, "point_lla", 9) == 0) {
-				if (!gnss_zero_defined) {
-					showMessage(inputpath, "Error: home position not defined, use .home_ll to define", linenumber);
-					return false;
-				}
-				// record line end
+				//if (!gnss_zero_defined) {
+				//	showMessage(inputpath, "Error: home position not defined, use .home_ll to define", linenumber);
+				//	return false;
+				//}
+				//// record line end
+				//const char* lineend = strchr(lineptr, '\n');
+				//// create type converter
+				//Float_Converter converter;
+				//// allocate memory
+				//data.reserve(13);
+				//data.push_back(POINT);
+				//// go to first value
+				//ptrnextvalue(lineptr);
+				//if (lineptr >= lineend) {
+				//	showMessage(inputpath, "Error: no arguments given for POINT_LLA, 3 required", linenumber);
+				//	return false;
+				//}
+				//float latitude = atof(lineptr);
+				//// next value
+				//ptrnextvalue(lineptr);
+				//if (lineptr >= lineend) {
+				//	showMessage(inputpath, "Error: one argument given for POINT_LLA, 3 required", linenumber);
+				//	return false;
+				//}
+				//float longitude = atof(lineptr);
+				//// next value
+				//ptrnextvalue(lineptr);
+				//if (lineptr >= lineend) {
+				//	showMessage(inputpath, "Error: two arguments given for POINT_LLA, 3 required", linenumber);
+				//	return false;
+				//}
+				//float altitude = atof(lineptr);
+
+				//float x, y;
+				//gps_cartesian(latitude, longitude, &x, &y);
+
+				//float coords[3] = { x, y, -altitude };
+				//for (int i = 0; i < 3; ++i) {
+				//	converter.value = coords[i];
+				//	for (int j = 0; j < 4; ++j) {
+				//		data.push_back(converter.reg[j]);
+				//	}
+				//}
+
+				// store end of line
 				const char* lineend = strchr(lineptr, '\n');
 				// create type converter
 				Float_Converter converter;
 				// allocate memory
 				data.reserve(13);
-				data.push_back(POINT);
-				// go to first value
-				ptrnextvalue(lineptr);
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: no arguments given for POINT_LLA, 3 required", linenumber);
-					return false;
-				}
-				float latitude = atof(lineptr);
-				// next value
-				ptrnextvalue(lineptr);
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: one argument given for POINT_LLA, 3 required", linenumber);
-					return false;
-				}
-				float longitude = atof(lineptr);
-				// next value
-				ptrnextvalue(lineptr);
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: two arguments given for POINT_LLA, 3 required", linenumber);
-					return false;
-				}
-				float altitude = atof(lineptr);
-
-				float x, y;
-				gps_cartesian(latitude, longitude, &x, &y);
-
-				float coords[3] = { x, y, -altitude };
-				for (int i = 0; i < 3; ++i) {
-					converter.value = coords[i];
-					for (int j = 0; j < 4; ++j) {
+				data.push_back(POINT_LLA);
+				// go to next value
+				for (INT_T i = 0; i < 3; ++i) {
+					ptrnextvalue(lineptr);
+					converter.value = atof(lineptr);
+					for (INT_T j = 0; j < 4; ++j) {
 						data.push_back(converter.reg[j]);
 					}
+				}
+
+				if (lineptr >= lineend) {
+					showMessage(inputpath, "Error: invalid arguments to mnemonic POINT_LLA", linenumber);
+					return false;
 				}
 			}
 			else if (strncmp(lineptr, "point", 5) == 0 && (*(lineptr + 5) == '\n' || *(lineptr + 5) == '\0' || *(lineptr + 5) == ' ' || *(lineptr + 5) == ';')) {
@@ -774,6 +804,14 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 				std::string name = std::string(lineptr, size);
 				if (!pushVarData(name, inputpath)) return false;
 			}
+			else {
+				unknown(inputpath, linenumber);
+				return false;
+			}
+			break;
+
+		case 'r':
+			if (strncmp(lineptr, "rtl", 3) == 0 && (*(lineptr + 3) == '\n' || *(lineptr + 3) == '\0' || *(lineptr + 3) == ' ' || *(lineptr + 3) == ';')) data.push_back(RTL);
 			else {
 				unknown(inputpath, linenumber);
 				return false;
@@ -878,31 +916,31 @@ bool assemblefile(std::string inputfile, std::string filestring, uint8_t * &data
 			}
 			break;
 
-		case '.':
-			if (strncmp(lineptr, ".home_ll", 7) == 0) {
-				// record line end
-				const char* lineend = strchr(lineptr, '\n');
-				ptrnextvalue(lineptr);
-				// check first value is given
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: no arguments given for \".home_ll\", two required", linenumber);
-					return false;
-				}
-				gnss_zerolat = atof(lineptr);
-				ptrnextvalue(lineptr);
-				// check second value is given
-				if (lineptr >= lineend) {
-					showMessage(inputpath, "Error: one argument given for \".home_ll\", two required", linenumber);
-					return false;
-				}
-				gnss_zerolong = atof(lineptr);
-				gnss_zero_defined = true;
-			}
-			else {
-				unknown(inputpath, linenumber);
-				return false;
-			}
-			break;
+			//case '.':
+			//	if (strncmp(lineptr, ".home_ll", 7) == 0) {
+			//		// record line end
+			//		const char* lineend = strchr(lineptr, '\n');
+			//		ptrnextvalue(lineptr);
+			//		// check first value is given
+			//		if (lineptr >= lineend) {
+			//			showMessage(inputpath, "Error: no arguments given for \".home_ll\", two required", linenumber);
+			//			return false;
+			//		}
+			//		gnss_zerolat = atof(lineptr);
+			//		ptrnextvalue(lineptr);
+			//		// check second value is given
+			//		if (lineptr >= lineend) {
+			//			showMessage(inputpath, "Error: one argument given for \".home_ll\", two required", linenumber);
+			//			return false;
+			//		}
+			//		gnss_zerolong = atof(lineptr);
+			//		gnss_zero_defined = true;
+			//	}
+			//	else {
+			//		unknown(inputpath, linenumber);
+			//		return false;
+			//	}
+			//	break;
 
 		case ';':
 		case '\n':
